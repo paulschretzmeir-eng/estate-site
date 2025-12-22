@@ -12,11 +12,15 @@ CREATE TABLE listings (
     id VARCHAR(100) PRIMARY KEY,
     
     -- Core listing data
-    price INTEGER NOT NULL,
+    price INTEGER,
+    rent_price INTEGER,
     bedrooms INTEGER,
     bathrooms DECIMAL(3,1),
     sqft INTEGER,
-    property_type VARCHAR(20) DEFAULT 'sale',
+    
+    -- Property availability
+    available_for_sale BOOLEAN DEFAULT FALSE,
+    available_for_rent BOOLEAN DEFAULT FALSE,
     
     -- Location
     address TEXT,
@@ -32,6 +36,12 @@ CREATE TABLE listings (
     
     -- Amenities (array)
     nearby_amenities TEXT[],
+    
+    -- Construction/Development Status
+    construction_status VARCHAR(50) DEFAULT 'completed',
+    completion_date DATE,
+    developer_name VARCHAR(200),
+    project_name VARCHAR(200),
     
     -- Vector embedding for semantic search
     embedding vector(1536),
@@ -52,13 +62,17 @@ CREATE TABLE listings (
 
 -- 3) Create indexes for fast queries
 CREATE INDEX idx_price ON listings(price) WHERE is_active = TRUE;
+CREATE INDEX idx_rent_price ON listings(rent_price) WHERE is_active = TRUE;
 CREATE INDEX idx_bedrooms ON listings(bedrooms) WHERE is_active = TRUE;
 CREATE INDEX idx_city ON listings(city) WHERE is_active = TRUE;
 CREATE INDEX idx_state ON listings(state) WHERE is_active = TRUE;
-CREATE INDEX idx_property_type ON listings(property_type) WHERE is_active = TRUE;
+CREATE INDEX idx_available_for_sale ON listings(available_for_sale) WHERE is_active = TRUE;
+CREATE INDEX idx_available_for_rent ON listings(available_for_rent) WHERE is_active = TRUE;
+CREATE INDEX idx_construction_status ON listings(construction_status) WHERE is_active = TRUE;
 
 -- 4) Composite index for common queries
 CREATE INDEX idx_location_price ON listings(city, state, price) WHERE is_active = TRUE;
+CREATE INDEX idx_location_rent ON listings(city, state, rent_price) WHERE is_active = TRUE;
 
 -- 5) GIN index for amenities array search
 CREATE INDEX idx_amenities ON listings USING gin(nearby_amenities);
@@ -82,7 +96,6 @@ CREATE TRIGGER update_listings_updated_at
     BEFORE UPDATE ON listings 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
-
 -- ==========================================
 -- ✅ Database schema created successfully!
 -- ==========================================

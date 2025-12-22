@@ -26,3 +26,8 @@ Your database is ready for backend code.
 - The table is empty (0 rows)
 - Data will be added later by the Python backend
 - Backend will pull from real estate APIs
+
+## Security Reminder
+- Never commit your `.env` file to GitHub
+- Your `.gitignore` should include `.env`
+- Keep your password private and secure
