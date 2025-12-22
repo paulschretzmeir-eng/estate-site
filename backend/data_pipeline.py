@@ -32,10 +32,33 @@ def get_fake_listings() -> List[Dict[str, Any]]:
         ("Hamburg", "HH"),
         ("Frankfurt", "HE"),
         ("Cologne", "NW"),
+        ("Austin", "TX"),
+        ("San Francisco", "CA"),
+        ("New York", "NY"),
+        ("London", "LN"),
     ]
+
+    amenities_by_type = {
+        "urban": ["park", "public_transport", "supermarket", "cafe", "gym"],
+        "suburban": ["park", "supermarket", "school", "playground", "clinic"],
+        "luxury": ["gym", "pool", "spa", "concierge", "parking"],
+    }
 
     for i in range(5):
         city, state = sample_cities[i % len(sample_cities)]
+        # vary property type and amenities
+        prop_type = random.choice(["urban", "suburban", "luxury"])
+        amenities = random.sample(amenities_by_type[prop_type], k=min(3, len(amenities_by_type[prop_type])))
+
+        # mix availability flags with some having both
+        sale_flag = random.random() > 0.3
+        rent_flag = random.random() > 0.5
+        if random.random() > 0.85:
+            sale_flag = True
+            rent_flag = True
+
+        construction_status = random.choice(["completed", "under_construction", "pre_construction"])
+
         listing = {
             "id": str(uuid.uuid4()),
             "price": random.randint(200000, 1200000),
@@ -43,8 +66,8 @@ def get_fake_listings() -> List[Dict[str, Any]]:
             "bedrooms": random.randint(1, 5),
             "bathrooms": round(random.uniform(1.0, 3.5), 1),
             "sqft": random.randint(40, 250),
-            "available_for_sale": True if random.random() > 0.3 else False,
-            "available_for_rent": True if random.random() > 0.5 else False,
+            "available_for_sale": sale_flag,
+            "available_for_rent": rent_flag,
             "address": f"{random.randint(1,200)} Example St",
             "city": city,
             "state": state,
@@ -53,11 +76,11 @@ def get_fake_listings() -> List[Dict[str, Any]]:
             "longitude": round(13.0 + random.uniform(-0.5, 0.5), 8),
             "description": f"Charming {random.randint(1,5)}-room property in {city}.",
             "neighborhood_description": f"Quiet residential area near amenities in {city}.",
-            "nearby_amenities": ["park", "supermarket", "public_transport"],
-            "construction_status": "completed",
+            "nearby_amenities": amenities,
+            "construction_status": construction_status,
             "completion_date": None,
-            "developer_name": "Acme Developments",
-            "project_name": f"Project {random.choice(['A', 'B', 'C'])}",
+            "developer_name": random.choice(["Acme Developments", "Prime Builders", "Urban Homes"]),
+            "project_name": f"Project {random.choice(['A', 'B', 'C', 'D'])}",
             "embedding": generate_fake_embedding(1536),
             "raw_json": {},
             "source_api": "FAKE_DATA",

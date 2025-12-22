@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import traceback
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -28,11 +29,14 @@ def api_search():
         payload = request.get_json() or {}
         prompt = payload.get("prompt", "")
         print(f"[app] /api/search prompt={prompt}")
+
         result = run_search(prompt)
         return jsonify({"ok": True, "data": result})
     except Exception as e:
-        print(f"[app] /api/search error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(f"[app] /api/search error: {e}\n{tb}")
+        # Return a user-friendly message without internal details
+        return jsonify({"ok": False, "error": "Internal server error during search"}), 500
 
 
 @app.route("/api/sync-data", methods=["POST"])
@@ -45,8 +49,9 @@ def api_sync_data():
         run_data_pipeline()
         return jsonify({"ok": True, "message": "Data pipeline run complete"})
     except Exception as e:
-        print(f"[app] /api/sync-data error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(f"[app] /api/sync-data error: {e}\n{tb}")
+        return jsonify({"ok": False, "error": "Internal server error during data sync"}), 500
 
 
 if __name__ == "__main__":
