@@ -6,9 +6,9 @@ import traceback
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from .data_pipeline import run_data_pipeline
-from .search_engine import search as run_search
-from .database import db
+from data_pipeline import run_data_pipeline
+from search_engine import search as run_search
+from database import db
 
 print("[app] Starting backend app module")
 
