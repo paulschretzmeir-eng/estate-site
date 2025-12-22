@@ -6,7 +6,7 @@ import random
 import uuid
 from typing import List, Dict, Any
 
-from .database import db
+from database import db
 
 USE_REAL_DATA = os.getenv("USE_REAL_DATA", "false").lower() == "true"
 
