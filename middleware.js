@@ -24,20 +24,6 @@ export default function middleware(request) {
     },
   });
 }
-
-  // Invalid credentials
-  return new NextResponse('Unauthorized', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="EstateGPT - Private Deployment"',
-    },
-  });
-}
-
-// Configure which routes this middleware applies to
-export const config = {
-  matcher: [
-    /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
