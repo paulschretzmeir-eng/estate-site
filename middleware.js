@@ -13,7 +13,7 @@ export default function middleware(request) {
     // (process.env is unreliable in Vercel Edge Middleware)
     // TODO: Move to Vercel environment variables in dashboard once stable
     const validUser = 'schretzmeirp';
-    const validPassword = 'Pauls007.';
+    const validPassword = 'EstateGPT2024!';
 
     if (user === validUser && pwd === validPassword) {
       // If auth is correct, return nothing (allows the request to continue)
