@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "real-estate-frontend",
   "version": "0.1.0",
   "private": true,
@@ -8,15 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vitejs/plugin-react": "^5.1.2",
+    "axios": "^1.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.14.1",
-    "axios": "^1.4.0"
+    "react-router-dom": "^6.14.1"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "tailwindcss": "^3.5.0",
-    "postcss": "^8.4.21",
-    "autoprefixer": "^10.4.14"
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "vite": "^5.0.0"
   }
 }
