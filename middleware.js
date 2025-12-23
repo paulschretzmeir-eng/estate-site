@@ -9,8 +9,13 @@ export default function middleware(request) {
     const authValue = basicAuth.split(' ')[1];
     const [user, pwd] = atob(authValue).split(':');
 
-    // Check against environment variables
-    if (user === 'schretzmeirp' && pwd === process.env.BASIC_AUTH_PASSWORD) {
+    // Hardcoded credentials for Edge Runtime
+    // (process.env is unreliable in Vercel Edge Middleware)
+    // TODO: Move to Vercel environment variables in dashboard once stable
+    const validUser = 'schretzmeirp';
+    const validPassword = 'Pauls007.';
+
+    if (user === validUser && pwd === validPassword) {
       // If auth is correct, return nothing (allows the request to continue)
       return;
     }
