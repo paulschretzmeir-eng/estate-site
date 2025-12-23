@@ -30,7 +30,7 @@ export default function FilterPanel({ onApply }){
         <input placeholder="Min price" value={minPrice} onChange={e=>setMinPrice(e.target.value)} className="border px-2 py-1 rounded" />
         <input placeholder="Max price" value={maxPrice} onChange={e=>setMaxPrice(e.target.value)} className="border px-2 py-1 rounded" />
         <input placeholder="Bedrooms" value={bedrooms} onChange={e=>setBedrooms(e.target.value)} className="border px-2 py-1 rounded" />
-        <input placeholder="Bathrooms" value={bathrooms} onChange={e=>setBathrooms(e.target.value)} className="border px-2 py-1 rounded" />
+        <input placeholder="Bathrooms (1-4)" value={bathrooms} onChange={e=>setBathrooms(e.target.value)} className="border px-2 py-1 rounded" />
         <input placeholder="City" value={city} onChange={e=>setCity(e.target.value)} className="border px-2 py-1 rounded col-span-2" />
       </div>
       <div className="flex items-center gap-3 mt-3">

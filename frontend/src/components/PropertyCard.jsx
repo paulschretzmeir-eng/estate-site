@@ -2,8 +2,10 @@ import React from 'react'
 
 export default function PropertyCard({ listing }){
   const img = (listing.image_urls && listing.image_urls[0]) || 'https://via.placeholder.com/400x250.png?text=Property'
-  const price = listing.price ? `${Number(listing.price).toLocaleString()} EUR` : null
-  const rent = listing.rent_price ? `${Number(listing.rent_price).toLocaleString()} EUR/mo` : null
+  const price = listing.price ? `€${Number(listing.price).toLocaleString('en-US')}` : null
+  const rent = listing.rent_price ? `€${Number(listing.rent_price).toLocaleString('en-US')}/mo` : null
+  const area = listing.sqm ? `${listing.sqm} m²` : null
+  const bathrooms = listing.bathrooms ? `${listing.bathrooms} bath${listing.bathrooms !== 1 ? 's' : ''}` : null
 
   return (
     <div className="bg-white rounded shadow overflow-hidden">
@@ -12,7 +14,7 @@ export default function PropertyCard({ listing }){
         <div className="flex justify-between items-start">
           <div>
             <h3 className="font-semibold">{listing.project_name || listing.address || listing.city}</h3>
-            <div className="text-sm text-gray-500">{listing.city} • {listing.bedrooms || '-'} bd</div>
+            <div className="text-sm text-gray-500">{listing.city} • {listing.bedrooms || '-'} bd {bathrooms && `• ${bathrooms}`} {area && `• ${area}`}</div>
           </div>
           <div className="text-right">
             {price && <div className="font-bold text-lg">{price}</div>}

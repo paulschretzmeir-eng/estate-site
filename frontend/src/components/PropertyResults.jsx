@@ -4,7 +4,7 @@ function formatCurrencyEUR(value) {
   if (value === null || value === undefined) return null;
   const num = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.]/g, ''));
   if (Number.isNaN(num)) return String(value);
-  return num.toLocaleString('en-US');
+  return `€${num.toLocaleString('en-US')}`;
 }
 
 function AmenityList({ items }) {
@@ -64,8 +64,9 @@ export default function PropertyResults({ results }) {
         const status = item?.construction_status || '—';
         const amenities = item?.nearby_amenities;
 
-        const saleText = price != null ? `${formatCurrencyEUR(price)} EUR` : null;
-        const rentText = rent != null ? `${formatCurrencyEUR(rent)} EUR/month` : null;
+        const saleText = price != null ? `${formatCurrencyEUR(price)}` : null;
+        const rentText = rent != null ? `${formatCurrencyEUR(rent)}/mo` : null;
+        const areaText = item?.sqm ? `${item.sqm} m²` : null;
 
         return (
           <div
@@ -84,6 +85,7 @@ export default function PropertyResults({ results }) {
             <div className="mb-3 flex items-center gap-4">
               <Stat icon={<BedIcon />}>{beds} bd</Stat>
               <Stat icon={<BathIcon />}>{baths} ba</Stat>
+              {areaText && <Stat icon={<span className="text-xs">📐</span>}>{areaText}</Stat>}
             </div>
 
             <div className="mb-2 flex flex-wrap items-center gap-3 text-gray-800">
