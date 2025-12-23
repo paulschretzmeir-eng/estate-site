@@ -40,7 +40,7 @@ export default function SearchBar({ onSearchResults }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g., 2 bedroom apartment in Berlin under 800000"
+            placeholder="e.g., 2 bedroom apartment in Bucharest under 300000"
             aria-label="Search query"
             className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
           />

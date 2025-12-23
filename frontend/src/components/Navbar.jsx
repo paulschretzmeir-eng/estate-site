@@ -10,7 +10,7 @@ export default function Navbar(){
     <nav className="bg-white shadow">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Link to="/" className="text-2xl font-semibold text-blue-600">RealEstateAI</Link>
+          <Link to="/" className="text-2xl font-semibold text-blue-600">EstateGPT</Link>
           <div className="hidden md:flex space-x-3 text-gray-600">
             <Link to="/search" className="hover:text-blue-600">Search</Link>
             <a href="#features" className="hover:text-blue-600">Features</a>
