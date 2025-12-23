@@ -3,25 +3,46 @@ export const config = {
 };
 
 export default function middleware(request) {
-  const basicAuth = request.headers.get('authorization');
+  const header = request.headers.get('authorization') || '';
 
-  if (basicAuth) {
-    const authValue = basicAuth.split(' ')[1];
-    const [user, pwd] = atob(authValue).split(':');
+  // Minimal debug logging to trace auth flow
+  console.log('[edge] middleware invoked');
+  if (header) console.log('[edge] auth header present');
 
-    // Hardcoded credentials for Edge Runtime
-    // (process.env is unreliable in Vercel Edge Middleware)
-    // TODO: Move to Vercel environment variables in dashboard once stable
-    const validUser = 'schretzmeirp';
-    const validPassword = 'EstateGPT2024!';
+  const parts = header.split(' ');
+  const scheme = parts[0] || '';
+  const encoded = parts[1] || '';
 
-    if (user === validUser && pwd === validPassword) {
-      // If auth is correct, return nothing (allows the request to continue)
-      return;
+  if (scheme.toLowerCase() === 'basic' && encoded) {
+    try {
+      const decoded = atob(encoded);
+      const sepIndex = decoded.indexOf(':');
+      const user = sepIndex >= 0 ? decoded.slice(0, sepIndex) : decoded;
+      const pwd = sepIndex >= 0 ? decoded.slice(sepIndex + 1) : '';
+
+      // Hardcoded credentials for Edge Runtime (temporary)
+      const validUser = 'schretzmeirp';
+      const validPassword = 'Pauls007.';
+
+      const userMatch = user === validUser;
+      const pwdMatch = pwd === validPassword;
+      console.log(`[edge] user match: ${userMatch}, pwd match: ${pwdMatch}`);
+
+      if (userMatch && pwdMatch) {
+        console.log('[edge] auth success, allowing request');
+        // Return nothing to allow the request to continue
+        return;
+      }
+      console.warn('[edge] auth failed: credentials mismatch');
+    } catch (e) {
+      console.error('[edge] auth decode error:', e);
     }
+  } else {
+    if (header) console.warn('[edge] unsupported auth scheme');
+    else console.log('[edge] no auth header');
   }
 
-  // If not authorized, return 401
+  // Challenge the client for Basic Auth
   return new Response('Auth required', {
     status: 401,
     headers: {
