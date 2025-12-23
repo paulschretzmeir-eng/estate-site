@@ -25,7 +25,7 @@ export async function searchProperties(query, options = {}) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query }),
+        body: JSON.stringify({ prompt: query }),
       signal: controller.signal,
     });
 
