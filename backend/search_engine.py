@@ -1,23 +1,23 @@
 from dotenv import load_dotenv
-    if not listings:
-        suggestions = [
-            "Try broadening your price range.",
-            "Try removing specific neighborhood names.",
-            "Try 'for rent' or 'for sale' explicitly to refine results.",
-        ]
-        return (
-            "No listings matched your query. "
-            + "Here are some suggestions: "
-            + " ".join(suggestions)
-        )
+if not listings:
+    suggestions = [
+        "Try broadening your price range.",
+        "Try removing specific neighborhood names.",
+        "Try 'for rent' or 'for sale' explicitly to refine results.",
+    ]
+    return (
+        "No listings matched your query. "
+        + "Here are some suggestions: "
+        + " ".join(suggestions)
+    )
 
-    parts = [f"I found {len(listings)} listings matching your filters:\n"]
+parts = [f"I found {len(listings)} listings matching your filters:\n"]
 
-    for r in listings:
-        price = r.get("price")
-        rent = r.get("rent_price")
-        city = r.get("city") or "Unknown"
-        beds = r.get("bedrooms") or "-"
+for r in listings:
+    price = r.get("price")
+    rent = r.get("rent_price")
+    city = r.get("city") or "Unknown"
+    beds = r.get("bedrooms") or "-"
         baths = r.get("bathrooms") or "-"
         status = r.get("construction_status") or "unknown"
         amenities = r.get("nearby_amenities") or []
