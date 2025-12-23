@@ -22,7 +22,13 @@ CREATE TABLE listings (
     available_for_sale BOOLEAN DEFAULT FALSE,
     available_for_rent BOOLEAN DEFAULT FALSE,
     
-    -- Location
+    -- Location (new hierarchy: Bucharest + Ilfov)
+    judet VARCHAR(50) NOT NULL,              -- 'București' or 'Ilfov'
+    city_town VARCHAR(100) NOT NULL,         -- 'București' or Ilfov town/commune
+    sector INTEGER,                          -- 1-6 for București sectors, NULL for Ilfov
+    area_neighborhood VARCHAR(100) NOT NULL, -- Specific area: neighborhood, village, or town name
+    
+    -- Legacy location fields (deprecated, kept for compatibility)
     address TEXT,
     city VARCHAR(100),
     state VARCHAR(50),
@@ -60,19 +66,22 @@ CREATE TABLE listings (
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- 3) Create indexes for fast queries
+-- 3) Create indexes for fast queries (updated for new location hierarchy)
 CREATE INDEX idx_price ON listings(price) WHERE is_active = TRUE;
 CREATE INDEX idx_rent_price ON listings(rent_price) WHERE is_active = TRUE;
 CREATE INDEX idx_bedrooms ON listings(bedrooms) WHERE is_active = TRUE;
-CREATE INDEX idx_city ON listings(city) WHERE is_active = TRUE;
-CREATE INDEX idx_state ON listings(state) WHERE is_active = TRUE;
+CREATE INDEX idx_judet ON listings(judet) WHERE is_active = TRUE;
+CREATE INDEX idx_sector ON listings(sector) WHERE is_active = TRUE;
+CREATE INDEX idx_city_town ON listings(city_town) WHERE is_active = TRUE;
+CREATE INDEX idx_area_neighborhood ON listings(area_neighborhood) WHERE is_active = TRUE;
 CREATE INDEX idx_available_for_sale ON listings(available_for_sale) WHERE is_active = TRUE;
 CREATE INDEX idx_available_for_rent ON listings(available_for_rent) WHERE is_active = TRUE;
 CREATE INDEX idx_construction_status ON listings(construction_status) WHERE is_active = TRUE;
 
--- 4) Composite index for common queries
-CREATE INDEX idx_location_price ON listings(city, state, price) WHERE is_active = TRUE;
-CREATE INDEX idx_location_rent ON listings(city, state, rent_price) WHERE is_active = TRUE;
+-- 4) Composite index for common queries (location + price)
+CREATE INDEX idx_judet_price ON listings(judet, price) WHERE is_active = TRUE;
+CREATE INDEX idx_sector_price ON listings(judet, sector, price) WHERE is_active = TRUE;
+CREATE INDEX idx_location_amenity ON listings(judet, city_town, area_neighborhood, price) WHERE is_active = TRUE;
 
 -- 5) GIN index for amenities array search
 CREATE INDEX idx_amenities ON listings USING gin(nearby_amenities);
