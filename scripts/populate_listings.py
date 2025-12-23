@@ -5,13 +5,15 @@ Populate Supabase listings table with Romanian residential property listings.
 Steps:
 1. Load 200 Romanian listings from database/seed/romania_listings.json
 2. Connect to Supabase
-3. DELETE all rows from listings table
-4. Batch insert the 200 listings
-5. Verify: count rows and log 2 sample rows
+3. CREATE table if it doesn't exist (with new European standards schema)
+4. DELETE all rows from listings table
+5. Batch insert the 200 listings
+6. Verify: count rows and log 2 sample rows
 """
 
 import json
 import os
+import psycopg2
 from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client
@@ -33,10 +35,65 @@ def load_listings():
     return data
 
 
+def ensure_schema(client):
+    """Create listings table if it doesn't exist (with new European standards schema)."""
+    print("⏳ Ensuring table schema exists...")
+    try:
+        # Try to query the table - if it fails, create it
+        client.table("listings").select("id").limit(1).execute()
+        print("✓ Listings table already exists")
+    except Exception as e:
+        print(f"⚠️  Table doesn't exist or error: {e}")
+        print("📝 Creating listings table with European standards schema...")
+        
+        # Use RPC to execute raw SQL - check if RPC exists
+        try:
+            # Try using the SQL migration as an RPC call
+            sql = """
+            DROP TABLE IF EXISTS listings CASCADE;
+            
+            CREATE TABLE listings (
+                id VARCHAR(100) PRIMARY KEY,
+                price INTEGER,
+                rent_price INTEGER,
+                bedrooms INTEGER,
+                bathrooms INTEGER,
+                sqm INTEGER,
+                available_for_sale BOOLEAN DEFAULT FALSE,
+                available_for_rent BOOLEAN DEFAULT FALSE,
+                address TEXT,
+                city VARCHAR(100),
+                description TEXT,
+                nearby_amenities TEXT[],
+                construction_status VARCHAR(50) DEFAULT 'completed',
+                listing_url TEXT,
+                image_urls TEXT[],
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE INDEX idx_listings_city ON listings(city);
+            CREATE INDEX idx_listings_price ON listings(price);
+            CREATE INDEX idx_listings_rent_price ON listings(rent_price);
+            CREATE INDEX idx_listings_bedrooms ON listings(bedrooms);
+            CREATE INDEX idx_listings_available_sale ON listings(available_for_sale);
+            CREATE INDEX idx_listings_available_rent ON listings(available_for_rent);
+            """
+            # Try executing via RPC if available
+            result = client.rpc("sql_exec", {"sql": sql}).execute()
+            print("✓ Table created via RPC")
+        except Exception as rpc_err:
+            print(f"⚠️  RPC failed: {rpc_err}")
+            print("❌ Cannot auto-create table. Please run the SQL migration manually:")
+            print("   1. Go to Supabase Dashboard > SQL Editor")
+            print("   2. Open: database/migrations/001_european_standards.sql")
+            print("   3. Execute the SQL")
+            print("   4. Run this script again")
+            raise
+
+
 def delete_all(client):
     """Delete all rows from listings table."""
     print("⏳ Deleting all existing listings from database...")
-    # Use RPC or direct delete - simplest is a full delete with no filter
     response = client.table("listings").delete().neq("id", "").execute()
     print(f"✓ Deleted all existing listings")
 
@@ -107,16 +164,19 @@ def main():
     print(f"\n🔌 Connecting to Supabase: {SUPABASE_URL}")
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    print("\n📥 Step 1: Loading seed data...")
+    print("\n🏗️  Step 1: Ensuring table schema...")
+    ensure_schema(client)
+    
+    print("\n📥 Step 2: Loading seed data...")
     listings = load_listings()
     
-    print("\n🗑️  Step 2: Clearing existing data...")
+    print("\n🗑️  Step 3: Clearing existing data...")
     delete_all(client)
     
-    print("\n📝 Step 3: Batch inserting new listings...")
+    print("\n📝 Step 4: Batch inserting new listings...")
     inserted = batch_insert(client, listings, batch_size=BATCH_SIZE)
     
-    print("\n🔍 Step 4: Verifying population...")
+    print("\n🔍 Step 5: Verifying population...")
     total_count = verify(client)
     
     print("\n" + "=" * 70)

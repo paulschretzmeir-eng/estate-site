@@ -11,12 +11,12 @@ CREATE TABLE listings (
     -- Primary Key
     id VARCHAR(100) PRIMARY KEY,
     
-    -- Core listing data
-    price INTEGER,
-    rent_price INTEGER,
+    -- Core listing data (EUR, Romanian standards)
+    price INTEGER,          -- Price in EUR (whole euros)
+    rent_price INTEGER,     -- Monthly rent in EUR
     bedrooms INTEGER,
-    bathrooms DECIMAL(3,1),
-    sqft INTEGER,
+    bathrooms INTEGER,      -- Number of bathroom rooms (integers only, Romanian standard)
+    sqm INTEGER,            -- Square meters (NOT square feet; European standard)
     
     -- Property availability
     available_for_sale BOOLEAN DEFAULT FALSE,

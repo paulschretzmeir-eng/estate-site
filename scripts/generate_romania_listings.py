@@ -99,10 +99,33 @@ def make_address(city: str, neighborhood: str) -> str:
     nr = random.randint(1, 200)
     return f"{random.choice(street_names)} {nr}, {neighborhood}"
 
-def bathrooms_for_bed(bed: int) -> float:
-    base = 1.0 if bed <= 1 else 1.5 if bed == 2 else 2.0 if bed == 3 else 2.5 if bed == 4 else 3.0
-    # add 0.0 or 0.5 randomly
-    return round(base + random.choice([0.0, 0.5]), 1)
+def bathrooms_for_bed(bed: int) -> int:
+    """Return integer number of bathrooms based on bedrooms (European standard)."""
+    if bed == 0:
+        return 1
+    elif bed == 1:
+        return 1
+    elif bed == 2:
+        return 2
+    elif bed == 3:
+        return 2 if random.random() < 0.5 else 3
+    elif bed >= 4:
+        return 3 if random.random() < 0.6 else 4
+    return 1
+
+def sqm_for_apartment(bed: int) -> int:
+    """Generate realistic square meters for apartments (European standard)."""
+    ranges = {
+        0: (35, 55),      # Studio
+        1: (50, 75),      # 1-bed
+        2: (75, 110),     # 2-bed
+        3: (100, 140),    # 3-bed
+        4: (130, 170),    # 4-bed
+        5: (160, 220),    # 5-bed (luxury)
+    }
+    bed_key = min(bed, 5)
+    low, high = ranges[bed_key]
+    return random.randint(low, high)
 
 def sale_price_for(city: str, bed: int, luxury: bool, under_construction_discount=False) -> int:
     # Base ranges by city tier
@@ -237,6 +260,7 @@ def generate_listings() -> list:
                 "address": address,
                 "bedrooms": bed if bed <= 5 else 5,
                 "bathrooms": bathrooms_for_bed(bed),
+                "sqm": sqm_for_apartment(bed),
                 "price": price,
                 "rent_price": rent_price,
                 "available_for_sale": available_for_sale,
