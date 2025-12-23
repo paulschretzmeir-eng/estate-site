@@ -143,10 +143,6 @@ def rent_price_for(city: str, bed: int, luxury: bool) -> int:
     rent = int(random.randint(low, high) * min(factor, 2.0))
     return max(250, min(rent, 4000))
 
-def title_for(ptype: str, bed: int, neighborhood: str, city: str) -> str:
-    bed_label = "Studio" if bed == 0 else f"{bed}-Bed"
-    return f"{bed_label} {ptype} in {neighborhood}, {city}"
-
 def desc_for(ptype: str, bed: int, neighborhood: str, city: str) -> str:
     lines = [
         f"Located in {neighborhood}, {city}, this {ptype.lower()} offers a balanced mix of comfort and accessibility.",
@@ -229,7 +225,6 @@ def generate_listings() -> list:
                 available_for_rent = True
                 status = "completed"
 
-            title = title_for(ptype, bed, nbhd, city)
             desc = desc_for(ptype, bed, nbhd, city)
             address = make_address(city, nbhd)
             images = pick_images(random.randint(3, 5))
@@ -237,7 +232,6 @@ def generate_listings() -> list:
 
             item = {
                 "id": str(uuid.uuid4()),
-                "title": title,
                 "description": desc,
                 "city": city,
                 "address": address,
