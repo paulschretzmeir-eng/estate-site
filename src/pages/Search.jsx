@@ -18,10 +18,18 @@ export default function Search(){
     try{
       const body = promptOrText || ''
       const resp = await searchAPI(body)
-      const data = resp.data || resp
-      setResults(data.results || data || [])
+      // Backend returns: {ok: true, data: {filters, results, response}}
+      console.log('[Search] API response:', resp)
+      if (resp.ok && resp.data) {
+        const listings = resp.data.results || []
+        console.log('[Search] Setting results:', listings.length, 'listings')
+        setResults(listings)
+      } else {
+        // Fallback for unexpected structure
+        setResults(resp.results || [])
+      }
     }catch(e){
-      console.error(e)
+      console.error('[Search] Error:', e)
       setError(e.message)
     }finally{
       setLoading(false)

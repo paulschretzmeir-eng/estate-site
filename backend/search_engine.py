@@ -216,8 +216,8 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
             except Exception:
                 pass
 
-        # Execute and sort
-        query = query.order("price", desc=False).limit(10)
+        # Execute and sort - get more than 15 to check for overflow
+        query = query.order("price", desc=False).limit(50)
         response = query.execute()
 
         data = None
@@ -230,6 +230,8 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
             return []
         if not isinstance(data, list):
             return [data]
+        
+        # Return all results (will be limited to 15 in search() function)
         return data
 
     except Exception as e:
@@ -237,10 +239,10 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
-def generate_ai_response(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]]) -> str:
+def generate_ai_response(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]], overflow_count: int = 0, total_matches: int = 0) -> str:
     """Generate natural language response using Groq, matching user's language."""
     if not GROQ_CLIENT:
-        return _generate_ai_response_fallback(prompt, filters, listings)
+        return _generate_ai_response_fallback(prompt, filters, listings, overflow_count, total_matches)
     
     if not listings:
         # Use Groq to generate "no results" message in user's language
@@ -263,6 +265,14 @@ Suggest they try broadening their search (price range, location, etc.). Keep it 
         except Exception as e:
             print(f"[search_engine] Groq response error: {e}")
             return "No listings matched your query. Try broadening your search."
+    
+    # Add overflow messaging for 15+ results
+    overflow_suffix = ""
+    if overflow_count > 0:
+        if "romanian" in prompt.lower() or any(word in prompt.lower() for word in ["apartament", "camere", "în"]):
+            overflow_suffix = f"\n\nAm trimis cele mai bune 15 rezultate din {total_matches} proprietăți găsite. Mai am {overflow_count} proprietăți disponibile. Doriți să le vedeți? Sau poate doriți să faceți căutarea mai detaliată?"
+        else:
+            overflow_suffix = f"\n\nI've sent you the 15 best matches based on your prompt, but I have {overflow_count} more. Would you like to see those too? Or maybe make your search more detailed?"
     
     try:
         # Format listings for Groq
@@ -320,17 +330,22 @@ Response:"""
             max_tokens=500
         )
         
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip() + overflow_suffix
         
     except Exception as e:
         print(f"[search_engine] Groq response generation error: {e}")
         return _generate_ai_response_fallback(prompt, filters, listings)
 
 
-def _generate_ai_response_fallback(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]]) -> str:
+def _generate_ai_response_fallback(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]], overflow_count: int = 0, total_matches: int = 0) -> str:
     """Fallback template-based response if Groq is unavailable."""
     if not listings:
         return "No listings matched your query. Try broadening price range or removing strict filters."
+
+    # Build overflow message
+    overflow_msg = ""
+    if overflow_count > 0:
+        overflow_msg = f"\n\nI've sent you the 15 best matches based on your prompt, but I have {overflow_count} more. Would you like to see those too? Or maybe make your search more detailed?"
 
     parts = [f"I found {len(listings)} listings matching your filters:\n"]
     for r in listings:
@@ -362,14 +377,28 @@ def _generate_ai_response_fallback(prompt: str, filters: Dict[str, Any], listing
             except Exception:
                 line += f" • €{rent}/mo (rent)"
         parts.append(line)
-    return "\n".join(parts)
+    return "\n".join(parts) + overflow_msg
 
 
 def search(user_prompt: str) -> Dict[str, Any]:
     filters = parse_user_query(user_prompt)
-    results = hybrid_search(filters)
-    text = generate_ai_response(user_prompt, filters, results)
-    return {"filters": filters, "results": results, "response": text}
+    all_results = hybrid_search(filters)
+    
+    # Enforce Top 15 limit
+    total_matches = len(all_results)
+    top_15 = all_results[:15]
+    overflow_count = max(0, total_matches - 15)
+    
+    # Generate AI response with overflow messaging
+    text = generate_ai_response(user_prompt, filters, top_15, overflow_count, total_matches)
+    
+    return {
+        "filters": filters,
+        "results": top_15,
+        "response": text,
+        "total_matches": total_matches,
+        "showing": len(top_15)
+    }
 
 
 if __name__ == "__main__":
