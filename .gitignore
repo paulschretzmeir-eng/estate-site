@@ -39,3 +39,15 @@ Thumbs.db
 
 # Frontend build artifacts
 .cache/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+
