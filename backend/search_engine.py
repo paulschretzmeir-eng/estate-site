@@ -3,64 +3,125 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()
 
+import json
 import os
 import re
 from typing import Any, Dict, List
 
+from groq import Groq
 from database import db
 
 
 USE_REAL_AI = os.getenv("USE_REAL_AI", "false").lower() == "true"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_CLIENT = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 
 def parse_user_query(prompt: str) -> Dict[str, Any]:
-    """Extract filters including location hierarchy (judet, sector, area_neighborhood).
+    """Extract filters using Groq/Llama 3.3 70B for multilingual parsing.
 
     Returns a dict possibly containing: bedrooms, bathrooms, max_price, min_price,
     judet, sector, area_neighborhood, city_town, available_for_sale, available_for_rent,
     construction_status, semantic_keywords.
     """
+    if not GROQ_CLIENT:
+        print("[search_engine] WARNING: GROQ_API_KEY not configured, using fallback regex")
+        return _parse_user_query_fallback(prompt)
+    
+    try:
+        groq_prompt = f"""You are a real estate search filter extractor for the Romanian market (București and Ilfov).
+
+Extract structured filters from the user query. Return ONLY a JSON object with these fields (omit if not mentioned):
+- bedrooms (integer)
+- bathrooms (integer)
+- min_price (integer, EUR)
+- max_price (integer, EUR)
+- area_neighborhood (string, e.g., "Pipera", "Dorobanți", "Floreasca", "Drumul Taberei")
+- sector (integer 1-6 for București)
+- judet (string: "București" or "Ilfov")
+- city_town (string: specific town/city name)
+- sqm_min (integer, minimum square meters)
+- sqm_max (integer, maximum square meters)
+- available_for_sale (boolean, true if user wants to buy)
+- available_for_rent (boolean, true if user wants to rent)
+- construction_status (string: "pre_construction", "under_construction", or "completed")
+- semantic_keywords (array of strings: amenities like "park", "school", "metro", "gym")
+
+Handle both English and Romanian queries. Convert "k" notation (e.g., "250k" = 250000).
+Romanian translations: camere=bedrooms, băi=bathrooms, apartament=apartment, casă=house
+
+User query: {prompt}
+
+Return ONLY the JSON object, no markdown, no explanation."""
+
+        response = GROQ_CLIENT.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": groq_prompt}],
+            temperature=0.1,
+            max_tokens=300
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Clean markdown if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+        
+        filters = json.loads(content)
+        print(f"[search_engine] Groq extracted filters: {filters}")
+        return filters
+        
+    except Exception as e:
+        print(f"[search_engine] Groq parsing error: {e}, falling back to regex")
+        return _parse_user_query_fallback(prompt)
+
+
+def _parse_user_query_fallback(prompt: str) -> Dict[str, Any]:
+    """Fallback regex-based parsing if Groq is unavailable."""
     filters: Dict[str, Any] = {}
     text = prompt or ""
 
-    m = re.search(r"(\d+)\s*(?:bed|beds|bedroom|bedrooms)", text, re.I)
+    m = re.search(r"(\d+)\s*(?:bed|beds|bedroom|bedrooms|camere|camera)", text, re.I)
     if m:
         filters["bedrooms"] = int(m.group(1))
 
-    # Parse bathrooms as integer (schema is int only)
-    m = re.search(r"(\d+)\s*(?:bath|baths|bathroom|bathrooms)", text, re.I)
+    m = re.search(r"(\d+)\s*(?:bath|baths|bathroom|bathrooms|băi|baie)", text, re.I)
     if m:
         try:
             filters["bathrooms"] = int(m.group(1))
         except ValueError:
             pass
 
-    m = re.search(r"(?:under|<|less than|max)\s*€?\s*(\d+[\d,]*)", text, re.I)
+    m = re.search(r"(?:under|<|less than|max|sub)\s*€?\s*(\d+[\d,]*k?)", text, re.I)
     if m:
-        filters["max_price"] = int(m.group(1).replace(",", ""))
-    else:
-        m2 = re.search(r"€\s*(\d+[\d,]*)", text)
-        if m2:
-            filters["max_price"] = int(m2.group(1).replace(",", ""))
+        price_str = m.group(1).replace(",", "")
+        if price_str.endswith("k"):
+            filters["max_price"] = int(price_str[:-1]) * 1000
+        else:
+            filters["max_price"] = int(price_str)
 
-    m = re.search(r"(?:at least|min)\s*€?\s*(\d+[\d,]*)", text, re.I)
+    m = re.search(r"(?:at least|min)\s*€?\s*(\d+[\d,]*k?)", text, re.I)
     if m:
-        filters["min_price"] = int(m.group(1).replace(",", ""))
+        price_str = m.group(1).replace(",", "")
+        if price_str.endswith("k"):
+            filters["min_price"] = int(price_str[:-1]) * 1000
+        else:
+            filters["min_price"] = int(price_str)
 
-    # Parse sector (1-6 for Bucharest)
     m = re.search(r"sector\s*(\d+)", text, re.I)
     if m:
         sector_num = int(m.group(1))
         if 1 <= sector_num <= 6:
             filters["sector"] = sector_num
 
-    # Parse Ilfov or Bucharest (judet)
     if re.search(r"ilfov", text, re.I):
         filters["judet"] = "Ilfov"
-    elif re.search(r"(buchare|bucuresti|bucuresti)", text, re.I):
+    elif re.search(r"(buchare|bucuresti|bucurești)", text, re.I):
         filters["judet"] = "București"
 
-    # Parse neighborhood/area (Pipera, Floreasca, Voluntari, etc.)
     neighborhoods = [
         "Pipera", "Floreasca", "Primăverii", "Aviatorilor", "Dorobanți", "Titan",
         "Tei", "Colentina", "Voluntari", "Otopeni", "Chitila", "Buftea",
@@ -72,36 +133,14 @@ def parse_user_query(prompt: str) -> Dict[str, Any]:
             filters["area_neighborhood"] = nbhood
             break
 
-    # Legacy: parse generic location (will be mapped if possible)
-    m = re.search(r"\bin\s+([A-Za-z\- ]{2,30})\b", text, re.I)
+    m = re.search(r"\b(?:in|în)\s+([A-Za-zăîâșțĂÎÂȘȚ\- ]{2,30})\b", text, re.I)
     if m and "area_neighborhood" not in filters:
         filters["city_town"] = m.group(1).strip()
 
-    if re.search(r"for sale|buy|purchase", text, re.I):
+    if re.search(r"for sale|buy|purchase|vânzare|cumpăr", text, re.I):
         filters["available_for_sale"] = True
-    if re.search(r"for rent|rent|rental", text, re.I):
+    if re.search(r"for rent|rent|rental|închiriere|chirie", text, re.I):
         filters["available_for_rent"] = True
-
-    if re.search(r"new construction|newly built|pre[- ]?construction", text, re.I):
-        filters["construction_status"] = "pre_construction"
-    elif re.search(r"under construction|in construction", text, re.I):
-        filters["construction_status"] = "under_construction"
-    elif re.search(r"move[- ]?in ready|completed|ready to move", text, re.I):
-        filters["construction_status"] = "completed"
-
-    amenity_keywords = [
-        "park", "school", "supermarket", "grocery", "gym", "restaurant", "cafe",
-        "public transport", "subway", "train", "tram", "bus", "playground",
-        "hospital", "clinic",
-    ]
-    semantic: List[str] = []
-    for k in amenity_keywords:
-        if re.search(rf"\b{k}\b", text, re.I):
-            norm = k.rstrip("s")
-            if norm not in semantic:
-                semantic.append(norm)
-    if semantic:
-        filters["semantic_keywords"] = semantic
 
     return filters
 
@@ -182,19 +221,102 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def generate_ai_response(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]]) -> str:
-    """Return a user-friendly summary of listings with new location format."""
-    if USE_REAL_AI:
-        return "(AI response not implemented)"
-
+    """Generate natural language response using Groq, matching user's language."""
+    if not GROQ_CLIENT:
+        return _generate_ai_response_fallback(prompt, filters, listings)
+    
     if not listings:
-        return (
-            "No listings matched your query. "
-            "Try broadening price range or removing strict filters."
+        # Use Groq to generate "no results" message in user's language
+        try:
+            no_results_prompt = f"""The user searched for: "{prompt}"
+
+No properties matched their search. Write a brief, helpful message in the SAME LANGUAGE as their query:
+- If English query → English response
+- If Romanian query → Romanian response
+
+Suggest they try broadening their search (price range, location, etc.). Keep it conversational and brief (2-3 sentences)."""
+
+            response = GROQ_CLIENT.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": no_results_prompt}],
+                temperature=0.7,
+                max_tokens=150
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[search_engine] Groq response error: {e}")
+            return "No listings matched your query. Try broadening your search."
+    
+    try:
+        # Format listings for Groq
+        listings_text = ""
+        for idx, r in enumerate(listings, 1):
+            judet = r.get("judet") or "Unknown"
+            city_town = r.get("city_town") or ""
+            sector = r.get("sector")
+            area_neighborhood = r.get("area_neighborhood") or ""
+            
+            if sector:
+                location = f"{area_neighborhood}, Sector {sector}, {city_town}"
+            else:
+                location = f"{area_neighborhood}, {city_town}, {judet}" if area_neighborhood else city_town
+            
+            beds = r.get("bedrooms") or "-"
+            baths = r.get("bathrooms") or "-"
+            sqm = r.get("sqm") or "-"
+            price = r.get("price")
+            dev = r.get("developer_name")
+            proj = r.get("project_name")
+            
+            line = f"{idx}. {location} — {beds} bd, {baths} ba, {sqm}m²"
+            if price is not None:
+                line += f" — €{int(price):,}"
+            if dev:
+                line += f" | Dev: {dev}"
+            if proj:
+                line += f" | Project: {proj}"
+            listings_text += line + "\n"
+        
+        groq_prompt = f"""You are a helpful real estate assistant for the Romanian market.
+
+The user asked: "{prompt}"
+
+Here are the matching properties:
+{listings_text}
+
+Write a natural, conversational response presenting these properties. CRITICAL RULES:
+- Respond in the SAME LANGUAGE as the user's query
+- If query was in English → respond in English
+- If query was in Romanian → respond in Romanian  
+- If query was mixed → use Romanian
+- Use proper real estate terminology for that language
+- Mention 2-3 top properties naturally
+- Keep it brief and professional (3-4 sentences)
+- Include key details: location, size, price
+
+Response:"""
+
+        response = GROQ_CLIENT.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": groq_prompt}],
+            temperature=0.7,
+            max_tokens=500
         )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        print(f"[search_engine] Groq response generation error: {e}")
+        return _generate_ai_response_fallback(prompt, filters, listings)
+
+
+def _generate_ai_response_fallback(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]]) -> str:
+    """Fallback template-based response if Groq is unavailable."""
+    if not listings:
+        return "No listings matched your query. Try broadening price range or removing strict filters."
 
     parts = [f"I found {len(listings)} listings matching your filters:\n"]
     for r in listings:
-        # Format location using new hierarchy
         judet = r.get("judet") or "Unknown"
         city_town = r.get("city_town") or ""
         sector = r.get("sector")
