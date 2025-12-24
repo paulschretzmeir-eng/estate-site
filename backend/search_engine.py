@@ -239,6 +239,58 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
+def _get_overflow_suggestions(filters: Dict[str, Any], is_romanian: bool = False) -> str:
+    """Analyze missing filters and suggest specific improvements."""
+    suggestions = []
+    
+    # Check for missing price filter
+    if not filters.get("max_price") and not filters.get("min_price"):
+        if is_romanian:
+            suggestions.append("adăugarea unui preț maxim (ex: 'sub 200k EUR')")
+        else:
+            suggestions.append("adding a price limit (e.g., 'under 200k')")
+    
+    # Check for missing bedroom filter
+    if not filters.get("bedrooms"):
+        if is_romanian:
+            suggestions.append("specificarea numărului de camere (ex: '2 camere')")
+        else:
+            suggestions.append("specifying the number of rooms (e.g., '2 bedrooms')")
+    
+    # Check for missing neighborhood (but has city/judet)
+    if not filters.get("area_neighborhood") and (filters.get("judet") or filters.get("city_town")):
+        if is_romanian:
+            suggestions.append("alegerea unui cartier specific (ex: 'Floreasca', 'Pipera')")
+        else:
+            suggestions.append("choosing a specific neighborhood (e.g., 'Floreasca', 'Pipera')")
+    
+    # Check for missing size filter
+    if not filters.get("sqm_min") and not filters.get("sqm_max"):
+        if is_romanian:
+            suggestions.append("specificarea suprafeței minime (ex: 'peste 80 mp')")
+        else:
+            suggestions.append("specifying a minimum size (e.g., 'over 80 sqm')")
+    
+    # Combine suggestions
+    if not suggestions:
+        return ""
+    
+    if is_romanian:
+        if len(suggestions) == 1:
+            return suggestions[0]
+        elif len(suggestions) == 2:
+            return f"{suggestions[0]} sau {suggestions[1]}"
+        else:
+            return ", ".join(suggestions[:-1]) + f" sau {suggestions[-1]}"
+    else:
+        if len(suggestions) == 1:
+            return suggestions[0]
+        elif len(suggestions) == 2:
+            return f"{suggestions[0]} or {suggestions[1]}"
+        else:
+            return ", ".join(suggestions[:-1]) + f", or {suggestions[-1]}"
+
+
 def generate_ai_response(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]], overflow_count: int = 0, total_matches: int = 0) -> str:
     """Generate natural language response using Groq, matching user's language."""
     if not GROQ_CLIENT:
@@ -266,13 +318,24 @@ Suggest they try broadening their search (price range, location, etc.). Keep it 
             print(f"[search_engine] Groq response error: {e}")
             return "No listings matched your query. Try broadening your search."
     
-    # Add overflow messaging for 15+ results
+    # Add overflow messaging for 15+ results with smart suggestions
     overflow_suffix = ""
     if overflow_count > 0:
-        if "romanian" in prompt.lower() or any(word in prompt.lower() for word in ["apartament", "camere", "în"]):
-            overflow_suffix = f"\n\nAm trimis cele mai bune 15 rezultate din {total_matches} proprietăți găsite. Mai am {overflow_count} proprietăți disponibile. Doriți să le vedeți? Sau poate doriți să faceți căutarea mai detaliată?"
+        is_romanian = "romanian" in prompt.lower() or any(word in prompt.lower() for word in ["apartament", "camere", "în"])
+        suggestions = _get_overflow_suggestions(filters, is_romanian)
+        
+        if is_romanian:
+            base_msg = f"\n\nAm găsit cele mai bune 15 rezultate din {total_matches} proprietăți găsite. Mai am {overflow_count} proprietăți disponibile."
+            if suggestions:
+                overflow_suffix = base_msg + f" Pentru a restrânge căutarea, încercați {suggestions}."
+            else:
+                overflow_suffix = base_msg + " Doriți să le vedeți pe celelalte?"
         else:
-            overflow_suffix = f"\n\nI've sent you the 15 best matches based on your prompt, but I have {overflow_count} more. Would you like to see those too? Or maybe make your search more detailed?"
+            base_msg = f"\n\nI've found the 15 best matches out of {total_matches} properties, but I have {overflow_count} more."
+            if suggestions:
+                overflow_suffix = base_msg + f" To narrow this down, try {suggestions}."
+            else:
+                overflow_suffix = base_msg + " Would you like to see the others?"
     
     try:
         # Format listings for Groq
@@ -342,10 +405,24 @@ def _generate_ai_response_fallback(prompt: str, filters: Dict[str, Any], listing
     if not listings:
         return "No listings matched your query. Try broadening price range or removing strict filters."
 
-    # Build overflow message
+    # Build overflow message with smart suggestions
     overflow_msg = ""
     if overflow_count > 0:
-        overflow_msg = f"\n\nI've sent you the 15 best matches based on your prompt, but I have {overflow_count} more. Would you like to see those too? Or maybe make your search more detailed?"
+        is_romanian = "romanian" in prompt.lower() or any(word in prompt.lower() for word in ["apartament", "camere", "în"])
+        suggestions = _get_overflow_suggestions(filters, is_romanian)
+        
+        if is_romanian:
+            base_msg = f"\n\nAm găsit cele mai bune 15 rezultate din {total_matches} proprietăți. Mai am {overflow_count} disponibile."
+            if suggestions:
+                overflow_msg = base_msg + f" Pentru a restrânge căutarea, încercați {suggestions}."
+            else:
+                overflow_msg = base_msg + " Doriți să le vedeți pe celelalte?"
+        else:
+            base_msg = f"\n\nI've found the 15 best matches out of {total_matches} properties, but I have {overflow_count} more."
+            if suggestions:
+                overflow_msg = base_msg + f" To narrow this down, try {suggestions}."
+            else:
+                overflow_msg = base_msg + " Would you like to see the others?"
 
     parts = [f"I found {len(listings)} listings matching your filters:\n"]
     for r in listings:
