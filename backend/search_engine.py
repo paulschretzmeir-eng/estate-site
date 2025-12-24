@@ -46,26 +46,37 @@ def parse_user_query(prompt: str) -> Dict[str, Any]:
         return _parse_user_query_fallback(prompt)
     
     try:
-        groq_prompt = f"""You are a real estate search filter extractor for the Romanian market (București and Ilfov).
+        groq_prompt = f"""You are a robust real estate search translator for the Romanian market (București and Ilfov).
 
-Extract structured filters from the user query. Return ONLY a JSON object with these fields (omit if not mentioned):
-- bedrooms (integer)
+Your job is to AGGRESSIVELY correct errors and extract structured filters from messy user input.
+
+CRITICAL RULES:
+1. **Correct spelling & grammar errors**: "1 rooms" → bedrooms: 1, "apartament" → apartment, "bucharest" → București
+2. **Normalize numbers**: "one room", "1 room", "1 rooms" → bedrooms: 1
+3. **Map city names**: "Bucharest", "bucuresti", "bucharest" → judet: "București"
+4. **Standardize property types**: "apartament", "studio", "flat" → semantic_keywords: ["apartment"]
+5. **Parse prices flexibly**: "250k", "250000", "250.000", "250k EUR" → max_price: 250000
+6. **Infer intent**: If vague, make best guess rather than returning empty (e.g., "apartment" → available_for_sale: true)
+7. **Handle mixed languages**: Romanian + English in same query is common
+
+Return ONLY a JSON object with these fields (omit if not mentioned):
+- bedrooms (integer) - interpret "1 rooms", "one room", "1 room" all as 1
 - bathrooms (integer)
-- min_price (integer, EUR)
-- max_price (integer, EUR)
+- min_price (integer, EUR, no currency symbols)
+- max_price (integer, EUR, no currency symbols)
 - area_neighborhood (string, e.g., "Pipera", "Dorobanți", "Floreasca", "Drumul Taberei")
-- sector (integer 1-6 for București)
-- judet (string: "București" or "Ilfov")
+- sector (integer 1-6 for București only)
+- judet (string: MUST be exactly "București" or "Ilfov", normalize from any spelling)
 - city_town (string: specific town/city name)
 - sqm_min (integer, minimum square meters)
 - sqm_max (integer, maximum square meters)
-- available_for_sale (boolean, true if user wants to buy)
-- available_for_rent (boolean, true if user wants to rent)
+- available_for_sale (boolean, default true if not specified)
+- available_for_rent (boolean)
 - construction_status (string: "pre_construction", "under_construction", or "completed")
 - semantic_keywords (array of strings: amenities like "park", "school", "metro", "gym")
 
-Handle both English and Romanian queries. Convert "k" notation (e.g., "250k" = 250000).
-Romanian translations: camere=bedrooms, băi=bathrooms, apartament=apartment, casă=house
+Common translations: camere=bedrooms, băi=bathrooms, apartament=apartment, casă=house, închiriere=rent, vânzare=sale
+Common typos to fix: "bucharest"→"București", "apartament"→apartment, "1 rooms"→bedrooms:1
 
 User query: {prompt}
 
@@ -88,6 +99,10 @@ Return ONLY the JSON object, no markdown, no explanation."""
             content = content.strip()
         
         filters = json.loads(content)
+        
+        # Safety mapping: Ensure output matches database schema
+        filters = _normalize_filters(filters)
+        
         print(f"[search_engine] Groq extracted filters: {filters}")
         return filters
         
@@ -96,14 +111,85 @@ Return ONLY the JSON object, no markdown, no explanation."""
         return _parse_user_query_fallback(prompt)
 
 
+def _normalize_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize and validate filter values to match database schema."""
+    normalized = {}
+    
+    # Normalize judet to official Romanian county names
+    if "judet" in filters:
+        judet_raw = str(filters["judet"]).strip()
+        judet_lower = judet_raw.lower()
+        if judet_lower in ["bucharest", "bucuresti", "bucurești", "bucarest"]:
+            normalized["judet"] = "București"
+        elif judet_lower == "ilfov":
+            normalized["judet"] = "Ilfov"
+        else:
+            normalized["judet"] = filters["judet"]  # Keep original if unrecognized
+    
+    # Normalize city_town (map Bucharest variants)
+    if "city_town" in filters:
+        city_raw = str(filters["city_town"]).strip()
+        city_lower = city_raw.lower()
+        if city_lower in ["bucharest", "bucuresti", "bucurești", "bucarest"]:
+            normalized["city_town"] = "București"
+        else:
+            normalized["city_town"] = filters["city_town"]
+    
+    # Ensure integers for numeric fields
+    for field in ["bedrooms", "bathrooms", "sector", "sqm_min", "sqm_max"]:
+        if field in filters:
+            try:
+                normalized[field] = int(filters[field])
+            except (ValueError, TypeError):
+                pass  # Skip invalid values
+    
+    # Ensure prices are integers (remove currency symbols, 'k' notation)
+    for price_field in ["min_price", "max_price"]:
+        if price_field in filters:
+            try:
+                price_val = filters[price_field]
+                if isinstance(price_val, str):
+                    # Remove currency symbols and spaces
+                    price_val = re.sub(r'[€$,\s]', '', price_val)
+                    # Handle 'k' notation
+                    if price_val.lower().endswith('k'):
+                        price_val = int(float(price_val[:-1]) * 1000)
+                    else:
+                        price_val = int(float(price_val))
+                normalized[price_field] = int(price_val)
+            except (ValueError, TypeError):
+                pass  # Skip invalid values
+    
+    # Pass through boolean and array fields
+    for field in ["available_for_sale", "available_for_rent"]:
+        if field in filters:
+            normalized[field] = bool(filters[field])
+    
+    if "construction_status" in filters:
+        normalized["construction_status"] = filters["construction_status"]
+    
+    if "area_neighborhood" in filters:
+        normalized["area_neighborhood"] = filters["area_neighborhood"]
+    
+    if "semantic_keywords" in filters:
+        normalized["semantic_keywords"] = filters["semantic_keywords"]
+    
+    return normalized
+
+
 def _parse_user_query_fallback(prompt: str) -> Dict[str, Any]:
     """Fallback regex-based parsing if Groq is unavailable."""
     filters: Dict[str, Any] = {}
     text = prompt or ""
 
-    m = re.search(r"(\d+)\s*(?:bed|beds|bedroom|bedrooms|camere|camera)", text, re.I)
+    # Handle bedrooms with flexible grammar ("1 rooms", "one room", "1 bed")
+    m = re.search(r"(\d+|one|two|three|four|five)\s*(?:bed|beds|bedroom|bedrooms|room|rooms|camere|camera)", text, re.I)
     if m:
-        filters["bedrooms"] = int(m.group(1))
+        bedroom_val = m.group(1).lower()
+        word_to_num = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+        filters["bedrooms"] = word_to_num.get(bedroom_val, int(bedroom_val) if bedroom_val.isdigit() else None)
+        if filters["bedrooms"] is None:
+            del filters["bedrooms"]
 
     m = re.search(r"(\d+)\s*(?:bath|baths|bathroom|bathrooms|băi|baie)", text, re.I)
     if m:
@@ -134,10 +220,14 @@ def _parse_user_query_fallback(prompt: str) -> Dict[str, Any]:
         if 1 <= sector_num <= 6:
             filters["sector"] = sector_num
 
+    # Handle location with common typos and variants
     if re.search(r"ilfov", text, re.I):
         filters["judet"] = "Ilfov"
-    elif re.search(r"(buchare|bucuresti|bucurești)", text, re.I):
+    elif re.search(r"(buchare|bucuresti|bucurești|bucarest|bukarest)", text, re.I):
         filters["judet"] = "București"
+        # Also set city_town for consistency
+        if "city_town" not in filters:
+            filters["city_town"] = "București"
 
     neighborhoods = [
         "Pipera", "Floreasca", "Primăverii", "Aviatorilor", "Dorobanți", "Titan",
@@ -150,16 +240,29 @@ def _parse_user_query_fallback(prompt: str) -> Dict[str, Any]:
             filters["area_neighborhood"] = nbhood
             break
 
-    m = re.search(r"\b(?:in|în)\s+([A-Za-zăîâșțĂÎÂȘȚ\- ]{2,30})\b", text, re.I)
-    if m and "area_neighborhood" not in filters:
-        filters["city_town"] = m.group(1).strip()
+    # Only parse city_town if judet is not already București (to avoid duplicates)
+    if "judet" not in filters or filters.get("judet") != "București":
+        m = re.search(r"\b(?:in|în)\s+([A-Za-zăîâșțĂÎÂȘȚ\- ]{2,30})\b", text, re.I)
+        if m and "area_neighborhood" not in filters:
+            city_candidate = m.group(1).strip()
+            # Don't set city_town if it's just a price or common word
+            if not re.search(r"(under|over|around|circa|sub|peste)", city_candidate, re.I):
+                filters["city_town"] = city_candidate
 
     if re.search(r"for sale|buy|purchase|vânzare|cumpăr", text, re.I):
         filters["available_for_sale"] = True
     if re.search(r"for rent|rent|rental|închiriere|chirie", text, re.I):
         filters["available_for_rent"] = True
+    
+    # Handle common typos in property types (apartament = Romanian for apartment)
+    if re.search(r"apartament|apartment|flat|studio", text, re.I):
+        if "semantic_keywords" not in filters:
+            filters["semantic_keywords"] = []
+        if "apartment" not in filters["semantic_keywords"]:
+            filters["semantic_keywords"].append("apartment")
 
-    return filters
+    # Apply normalization to fallback results
+    return _normalize_filters(filters)
 
 
 def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
