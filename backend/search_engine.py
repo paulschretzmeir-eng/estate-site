@@ -8,13 +8,30 @@ import os
 import re
 from typing import Any, Dict, List
 
-from groq import Groq
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("[search_engine] WARNING: groq package not installed, using fallback regex parsing")
+
 from database import db
 
 
 USE_REAL_AI = os.getenv("USE_REAL_AI", "false").lower() == "true"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_CLIENT = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+GROQ_CLIENT = None
+
+if GROQ_AVAILABLE and GROQ_API_KEY:
+    try:
+        GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
+        print("[search_engine] Groq client initialized successfully")
+    except Exception as e:
+        print(f"[search_engine] Failed to initialize Groq client: {e}")
+elif not GROQ_AVAILABLE:
+    print("[search_engine] Groq package not available, using fallback regex parsing")
+elif not GROQ_API_KEY:
+    print("[search_engine] GROQ_API_KEY not set, using fallback regex parsing")
 
 
 def parse_user_query(prompt: str) -> Dict[str, Any]:
