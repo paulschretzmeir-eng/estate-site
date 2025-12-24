@@ -306,18 +306,25 @@ def hybrid_search(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
             query = query.eq("construction_status", filters["construction_status"])
 
         # Amenities filter (semantic search)
+        # NOTE: Ignore property type keywords like "apartment", "house" - these are too broad
+        # Only filter on actual amenities like "gym", "pool", "parking"
         if filters.get("semantic_keywords"):
             keywords = filters["semantic_keywords"]
-            try:
-                if hasattr(query, "overlaps"):
-                    query = query.overlaps("nearby_amenities", keywords)
-                elif hasattr(query, "contains"):
-                    query = query.contains("nearby_amenities", keywords)
-                else:
-                    for kw in keywords:
-                        query = query.ilike("neighborhood_description", f"%{kw}%")
-            except Exception:
-                pass
+            # Filter out property type keywords
+            property_type_keywords = {"apartment", "house", "villa", "studio", "flat", "penthouse", "duplex"}
+            amenity_keywords = [kw for kw in keywords if kw.lower() not in property_type_keywords]
+            
+            if amenity_keywords:  # Only apply filter if we have real amenities
+                try:
+                    if hasattr(query, "overlaps"):
+                        query = query.overlaps("nearby_amenities", amenity_keywords)
+                    elif hasattr(query, "contains"):
+                        query = query.contains("nearby_amenities", amenity_keywords)
+                    else:
+                        for kw in amenity_keywords:
+                            query = query.ilike("neighborhood_description", f"%{kw}%")
+                except Exception:
+                    pass
 
         # Execute and sort - get more than 15 to check for overflow
         query = query.order("price", desc=False).limit(50)
