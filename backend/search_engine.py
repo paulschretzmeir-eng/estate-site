@@ -22,12 +22,16 @@ USE_REAL_AI = os.getenv("USE_REAL_AI", "false").lower() == "true"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_CLIENT = None
 
-if GROQ_AVAILABLE and GROQ_API_KEY:
-    try:
-        GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
-        print("[search_engine] Groq client initialized successfully")
-    except Exception as e:
-        print(f"[search_engine] Failed to initialize Groq client: {e}")
+def get_groq_client():
+    """Lazy initialization of Groq client"""
+    global GROQ_CLIENT
+    if GROQ_CLIENT is None and GROQ_AVAILABLE and GROQ_API_KEY:
+        try:
+            GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
+            print("[search_engine] Groq client initialized successfully")
+        except Exception as e:
+            print(f"[search_engine] Failed to initialize Groq client: {e}")
+    return GROQ_CLIENT
 elif not GROQ_AVAILABLE:
     print("[search_engine] Groq package not available, using fallback regex parsing")
 elif not GROQ_API_KEY:
@@ -41,7 +45,8 @@ def parse_user_query(prompt: str) -> Dict[str, Any]:
     judet, sector, area_neighborhood, city_town, available_for_sale, available_for_rent,
     construction_status, semantic_keywords.
     """
-    if not GROQ_CLIENT:
+    client = get_groq_client()
+    if not client:
         print("[search_engine] WARNING: GROQ_API_KEY not configured, using fallback regex")
         return _parse_user_query_fallback(prompt)
     
@@ -82,7 +87,7 @@ User query: {prompt}
 
 Return ONLY the JSON object, no markdown, no explanation."""
 
-        response = GROQ_CLIENT.chat.completions.create(
+        response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": groq_prompt}],
             temperature=0.1,
@@ -403,7 +408,8 @@ def _get_overflow_suggestions(filters: Dict[str, Any], is_romanian: bool = False
 
 def generate_ai_response(prompt: str, filters: Dict[str, Any], listings: List[Dict[str, Any]], overflow_count: int = 0, total_matches: int = 0) -> str:
     """Generate natural language response using Groq, matching user's language."""
-    if not GROQ_CLIENT:
+    client = get_groq_client()
+    if not client:
         return _generate_ai_response_fallback(prompt, filters, listings, overflow_count, total_matches)
     
     if not listings:
@@ -417,7 +423,7 @@ No properties matched their search. Write a brief, helpful message in the SAME L
 
 Suggest they try broadening their search (price range, location, etc.). Keep it conversational and brief (2-3 sentences)."""
 
-            response = GROQ_CLIENT.chat.completions.create(
+            response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": no_results_prompt}],
                 temperature=0.7,
@@ -496,7 +502,7 @@ Write a natural, conversational response presenting these properties. CRITICAL R
 
 Response:"""
 
-        response = GROQ_CLIENT.chat.completions.create(
+        response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": groq_prompt}],
             temperature=0.7,
