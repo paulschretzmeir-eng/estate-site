@@ -14,7 +14,13 @@ from chat_routes import chat_bp
 print("[app] Starting backend app module")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://estategpt.ro", "http://localhost:5173"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 app.register_blueprint(chat_bp)
 
 
