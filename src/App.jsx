@@ -7,19 +7,14 @@ import Signup from './pages/Signup';
 import Navbar from './components/Navbar';
 import { isAuthenticated } from './utils/auth';
 
-// Protected Route Component
-function ProtectedRoute({ children }) {
-  return isAuthenticated() ? children : <Navigate to="/login" replace />;
-}
-
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-300">
+    <div className="min-h-screen">
       <Routes>
-        {/* Landing Page - No Navbar */}
+        {/* Landing Page - NO NAVBAR */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* All other pages have Navbar */}
+        {/* All other pages WITH NAVBAR */}
         <Route
           path="/*"
           element={
