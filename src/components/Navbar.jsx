@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { isAuthenticated, getUserData, logout } from '../utils/auth';
+import { isAuthenticated, currentUser, logout } from '../utils/auth';
 
 function Navbar() {
   const navigate = useNavigate();
-  const user = getUserData();
+  const user = currentUser();
 
   const handleLogout = () => {
     logout();
