@@ -8,5 +8,6 @@ requests==2.31.0
 pgvector==0.2.4
 gunicorn==21.2.0
 groq==0.4.2
+httpx==0.24.1
 
 supabase==2.25.1
