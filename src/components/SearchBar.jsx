@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { searchProperties } from '../services/api';
 
-export default function SearchBar({ onSearchResults }) {
+export default function SearchBar({ onSearch }) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,10 +18,9 @@ export default function SearchBar({ onSearchResults }) {
 
     setLoading(true);
     try {
-      const data = await searchProperties(trimmed);
-      const results = Array.isArray(data?.results) ? data.results : data;
-      if (typeof onSearchResults === 'function') {
-        onSearchResults(results);
+      // Let the parent component (Search.jsx) handle the actual API call
+      if (typeof onSearch === 'function') {
+        await onSearch(trimmed);
       }
     } catch (err) {
       const message = err?.message || 'Something went wrong while searching.';

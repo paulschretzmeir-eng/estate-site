@@ -1,45 +1,41 @@
-import React, { useState } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Home from './pages/Home'
-import Search from './pages/Search'
-import Login from './pages/Login'
-import Signup from './pages/Signup'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
-import { isAuthenticated } from './utils/auth'
-import SearchBar from './components/SearchBar'
-import PropertyResults from './components/PropertyResults'
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
+import SearchPage from './pages/SearchPage';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Navbar from './components/Navbar';
+import { isAuthenticated } from './utils/auth';
 
-function Protected({ children }) {
-  return isAuthenticated() ? children : <Navigate to="/login" replace />
+// Protected Route Component
+function ProtectedRoute({ children }) {
+  return isAuthenticated() ? children : <Navigate to="/login" replace />;
 }
 
-export default function App() {
-  const [results, setResults] = useState([])
-
-  const handleSearchResults = (res) => {
-    setResults(Array.isArray(res) ? res : [])
-  }
-
+function App() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex-1">
-        <section className="mx-auto max-w-6xl px-4 py-6">
-          <div className="mb-6">
-            <SearchBar onSearchResults={handleSearchResults} />
-          </div>
-          <PropertyResults results={results} />
-        </section>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors duration-300">
+      <Routes>
+        {/* Landing Page - No Navbar */}
+        <Route path="/" element={<LandingPage />} />
 
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Protected><Search /></Protected>} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-        </Routes>
-      </main>
-      <Footer />
+        {/* All other pages have Navbar */}
+        <Route
+          path="/*"
+          element={
+            <>
+              <Navbar />
+              <Routes>
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+              </Routes>
+            </>
+          }
+        />
+      </Routes>
     </div>
-  )
+  );
 }
+
+export default App;
