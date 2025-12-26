@@ -17,8 +17,18 @@ from database import db
 # Create blueprint
 chat_bp = Blueprint('chat', __name__)
 
-# Initialize Groq client
-groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+# Groq client (initialized lazily)
+groq_client = None
+
+def get_groq_client():
+    global groq_client
+    if groq_client is None:
+        try:
+            groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+        except Exception as e:
+            print(f"[Groq Init Warning] {str(e)}")
+            groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+    return groq_client
 
 # JWT secret key
 JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-this')
@@ -116,7 +126,7 @@ When users search for properties:
         context_messages.append({'role': 'user', 'content': message})
         
         # Get AI response
-        response = groq_client.chat.completions.create(
+        response = get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=context_messages,
             temperature=0.7,
