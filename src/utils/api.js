@@ -1,5 +1,5 @@
 // API endpoint for backend search
-const API_URL = 'https://estate-site-production.up.railway.app';
+const API_URL = 'https://estate-site-production.up.railway.app/api';
 
 export async function searchAPI(prompt) {
   console.log('🔍 Searching with API_URL:', API_URL);
