@@ -9,11 +9,13 @@ from flask_cors import CORS
 from data_pipeline import run_data_pipeline
 from search_engine import search as run_search
 from database import db
+from chat_routes import chat_bp
 
 print("[app] Starting backend app module")
 
 app = Flask(__name__)
 CORS(app)
+app.register_blueprint(chat_bp)
 
 
 @app.route("/api/health", methods=["GET"])

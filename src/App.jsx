@@ -4,6 +4,8 @@ import LandingPage from './pages/LandingPage';
 import SearchPage from './pages/SearchPage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ChatPage from './pages/ChatPage';
+import OAuthCallback from './pages/OAuthCallback';
 import Navbar from './components/Navbar';
 import { isAuthenticated } from './utils/auth';
 
@@ -13,6 +15,13 @@ function App() {
       <Routes>
         {/* Landing Page - NO NAVBAR */}
         <Route path="/" element={<LandingPage />} />
+
+        {/* Chat Pages - NO NAVBAR (has its own layout) */}
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:chatId" element={<ChatPage />} />
+        
+        {/* OAuth Callback */}
+        <Route path="/auth/callback" element={<OAuthCallback />} />
 
         {/* All other pages WITH NAVBAR */}
         <Route

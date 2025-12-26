@@ -11,8 +11,8 @@ function LandingPage() {
     if (!query.trim()) return;
 
     setIsLoading(true);
-    // Navigate to search page with the query
-    navigate('/search', { state: { initialQuery: query } });
+    // Navigate to chat page with the query
+    navigate('/chat', { state: { initialQuery: query } });
   };
 
   return (
