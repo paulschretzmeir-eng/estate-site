@@ -1,19 +1,18 @@
 """
-EstateGPT Chat API Routes
-Flask backend for conversational property search
+EstateGPT Chat API Routes - Complete with Supabase
 """
 
 from flask import Blueprint, request, jsonify
 from functools import wraps
 import jwt
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 from groq import Groq
 import json
 
-# Import your existing database connection
-from database import get_db_connection
+# Import your existing database
+from database import db
 
 # Create blueprint
 chat_bp = Blueprint('chat', __name__)
@@ -82,27 +81,19 @@ def send_chat_message():
         # Create or get chat
         if not chat_id and user_id:
             chat_id = str(uuid.uuid4())
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO chats (id, user_id, title) VALUES (%s, %s, %s)",
-                (chat_id, user_id, message[:50])
-            )
-            conn.commit()
-            cursor.close()
-            conn.close()
+            db.client.table('chats').insert({
+                'id': chat_id,
+                'user_id': user_id,
+                'title': message[:50]
+            }).execute()
         
         # Save user message if authenticated
         if user_id and chat_id:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO messages (chat_id, role, content) VALUES (%s, %s, %s)",
-                (chat_id, 'user', message)
-            )
-            conn.commit()
-            cursor.close()
-            conn.close()
+            db.client.table('messages').insert({
+                'chat_id': chat_id,
+                'role': 'user',
+                'content': message
+            }).execute()
         
         # Build conversation context
         context_messages = []
@@ -135,31 +126,30 @@ When users search for properties:
         ai_message = response.choices[0].message.content
         
         # Check if property search
-        search_indicators = ['apartment', 'house', 'property', 'bedroom', 'price', 'rent', 'buy', 'sale']
+        search_indicators = ['apartment', 'house', 'property', 'bedroom', 'price', 'rent', 'buy', 'sale', 'garsoniera', 'studio']
         is_search_query = any(indicator in message.lower() for indicator in search_indicators)
         
         properties = []
         if is_search_query:
-            # Import your search function
-            from search_engine import hybrid_search
-            search_result = hybrid_search(message)
-            properties = search_result.get('results', [])[:5]
+            try:
+                from search import hybrid_search
+                search_result = hybrid_search(message)
+                properties = search_result.get('results', [])[:5]
+            except Exception as search_error:
+                print(f"[Search Error] {str(search_error)}")
         
         # Save assistant message
         if user_id and chat_id:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO messages (chat_id, role, content, properties) VALUES (%s, %s, %s, %s)",
-                (chat_id, 'assistant', ai_message, json.dumps(properties) if properties else None)
-            )
-            cursor.execute(
-                "UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                (chat_id,)
-            )
-            conn.commit()
-            cursor.close()
-            conn.close()
+            db.client.table('messages').insert({
+                'chat_id': chat_id,
+                'role': 'assistant',
+                'content': ai_message,
+                'properties': properties if properties else None
+            }).execute()
+            
+            db.client.table('chats').update({
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('id', chat_id).execute()
         
         return jsonify({
             'chatId': chat_id,
@@ -170,6 +160,8 @@ When users search for properties:
         
     except Exception as e:
         print(f"[Chat Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to process message'}), 500
 
 # ============================================
@@ -181,50 +173,37 @@ When users search for properties:
 def get_chat_history(current_user_id, chat_id):
     """Get full chat history"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        chat_result = db.client.table('chats').select('*').eq('id', chat_id).eq('user_id', current_user_id).execute()
         
-        cursor.execute(
-            "SELECT id, title, created_at FROM chats WHERE id = %s AND user_id = %s",
-            (chat_id, current_user_id)
-        )
-        chat = cursor.fetchone()
-        
-        if not chat:
+        if not chat_result.data:
             return jsonify({'error': 'Chat not found'}), 404
         
-        cursor.execute(
-            """SELECT id, role, content, properties, created_at 
-               FROM messages 
-               WHERE chat_id = %s 
-               ORDER BY created_at ASC""",
-            (chat_id,)
-        )
-        messages = cursor.fetchall()
+        chat = chat_result.data[0]
         
-        cursor.close()
-        conn.close()
+        messages_result = db.client.table('messages').select('*').eq('chat_id', chat_id).order('created_at').execute()
         
         return jsonify({
             'chat': {
-                'id': chat[0],
-                'title': chat[1],
-                'created_at': chat[2].isoformat()
+                'id': chat['id'],
+                'title': chat['title'],
+                'created_at': chat['created_at']
             },
             'messages': [
                 {
-                    'id': msg[0],
-                    'role': msg[1],
-                    'content': msg[2],
-                    'properties': msg[3] if msg[3] else [],
-                    'timestamp': msg[4].isoformat()
+                    'id': msg['id'],
+                    'role': msg['role'],
+                    'content': msg['content'],
+                    'properties': msg.get('properties', []) or [],
+                    'timestamp': msg['created_at']
                 }
-                for msg in messages
+                for msg in messages_result.data
             ]
         })
         
     except Exception as e:
         print(f"[Chat History Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch chat history'}), 500
 
 # ============================================
@@ -236,34 +215,22 @@ def get_chat_history(current_user_id, chat_id):
 def get_chat_list(current_user_id):
     """Get user's chat list"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """SELECT id, title, created_at, updated_at 
-               FROM chats 
-               WHERE user_id = %s 
-               ORDER BY updated_at DESC 
-               LIMIT 50""",
-            (current_user_id,)
-        )
-        chats = cursor.fetchall()
-        
-        cursor.close()
-        conn.close()
+        result = db.client.table('chats').select('*').eq('user_id', current_user_id).order('updated_at', desc=True).limit(50).execute()
         
         return jsonify([
             {
-                'id': chat[0],
-                'title': chat[1],
-                'created_at': chat[2].isoformat(),
-                'updated_at': chat[3].isoformat()
+                'id': chat['id'],
+                'title': chat['title'],
+                'created_at': chat['created_at'],
+                'updated_at': chat['updated_at']
             }
-            for chat in chats
+            for chat in result.data
         ])
         
     except Exception as e:
         print(f"[Chat List Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch chats'}), 500
 
 # ============================================
@@ -275,25 +242,17 @@ def get_chat_list(current_user_id):
 def delete_chat(current_user_id, chat_id):
     """Delete a chat"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        result = db.client.table('chats').delete().eq('id', chat_id).eq('user_id', current_user_id).execute()
         
-        cursor.execute(
-            "DELETE FROM chats WHERE id = %s AND user_id = %s",
-            (chat_id, current_user_id)
-        )
-        
-        if cursor.rowcount == 0:
+        if not result.data:
             return jsonify({'error': 'Chat not found'}), 404
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
         
         return jsonify({'success': True})
         
     except Exception as e:
         print(f"[Delete Chat Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to delete chat'}), 500
 
 # ============================================
@@ -311,21 +270,20 @@ def add_favorite(current_user_id):
         return jsonify({'error': 'Property ID required'}), 400
     
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        existing = db.client.table('favorites').select('*').eq('user_id', current_user_id).eq('listing_id', listing_id).execute()
         
-        cursor.execute(
-            "INSERT INTO favorites (user_id, listing_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (current_user_id, listing_id)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        if not existing.data:
+            db.client.table('favorites').insert({
+                'user_id': current_user_id,
+                'listing_id': listing_id
+            }).execute()
         
         return jsonify({'success': True})
         
     except Exception as e:
         print(f"[Add Favorite Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to add favorite'}), 500
 
 @chat_bp.route('/favorites/<listing_id>', methods=['DELETE'])
@@ -333,21 +291,14 @@ def add_favorite(current_user_id):
 def remove_favorite(current_user_id, listing_id):
     """Remove listing from favorites"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "DELETE FROM favorites WHERE user_id = %s AND listing_id = %s",
-            (current_user_id, listing_id)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        db.client.table('favorites').delete().eq('user_id', current_user_id).eq('listing_id', listing_id).execute()
         
         return jsonify({'success': True})
         
     except Exception as e:
         print(f"[Remove Favorite Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to remove favorite'}), 500
 
 @chat_bp.route('/favorites', methods=['GET'])
@@ -355,24 +306,19 @@ def remove_favorite(current_user_id, listing_id):
 def get_favorites(current_user_id):
     """Get user's favorite listings"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        favorites_result = db.client.table('favorites').select('listing_id').eq('user_id', current_user_id).order('created_at', desc=True).execute()
         
-        cursor.execute(
-            """SELECT l.* FROM listings l
-               INNER JOIN favorites f ON l.id = f.listing_id
-               WHERE f.user_id = %s
-               ORDER BY f.created_at DESC""",
-            (current_user_id,)
-        )
-        listings = cursor.fetchall()
+        if not favorites_result.data:
+            return jsonify([])
         
-        cursor.close()
-        conn.close()
+        listing_ids = [fav['listing_id'] for fav in favorites_result.data]
         
-        # Format listings
-        return jsonify([dict(zip([col[0] for col in cursor.description], row)) for row in listings])
+        listings_result = db.client.table('listings').select('*').in_('id', listing_ids).execute()
+        
+        return jsonify(listings_result.data)
         
     except Exception as e:
         print(f"[Get Favorites Error] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to fetch favorites'}), 500
