@@ -32,10 +32,6 @@ def get_groq_client():
         except Exception as e:
             print(f"[search_engine] Failed to initialize Groq client: {e}")
     return GROQ_CLIENT
-elif not GROQ_AVAILABLE:
-    print("[search_engine] Groq package not available, using fallback regex parsing")
-elif not GROQ_API_KEY:
-    print("[search_engine] GROQ_API_KEY not set, using fallback regex parsing")
 
 
 def parse_user_query(prompt: str) -> Dict[str, Any]:
