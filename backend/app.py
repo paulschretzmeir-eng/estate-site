@@ -21,7 +21,7 @@ CORS(app, resources={
         "allow_headers": ["Content-Type", "Authorization"]
     }
 })
-app.register_blueprint(chat_bp)
+app.register_blueprint(chat_bp, url_prefix='/api')
 
 
 @app.route("/api/health", methods=["GET"])
