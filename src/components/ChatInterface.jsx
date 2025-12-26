@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { sendChatMessage, getChatHistory } from '../utils/api';
 import PropertyCard from './PropertyCard';
 import { isAuthenticated } from '../utils/auth';
@@ -7,15 +7,28 @@ import { isAuthenticated } from '../utils/auth';
 function ChatInterface() {
   const { chatId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
+    const initialQuery = location.state?.initialQuery;
+    
     // Load chat history if chatId exists
     if (chatId) {
       loadChatHistory();
+    } else if (initialQuery) {
+      // Auto-send initial query from landing page
+      setInput(initialQuery);
+      // Trigger search automatically
+      setTimeout(() => {
+        const form = document.querySelector('form');
+        if (form) {
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }, 100);
     } else {
       // New chat - start with welcome message
       setMessages([{
@@ -25,7 +38,7 @@ function ChatInterface() {
         timestamp: new Date()
       }]);
     }
-  }, [chatId]);
+  }, [chatId, location.state]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
