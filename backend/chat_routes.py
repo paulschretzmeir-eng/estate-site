@@ -125,15 +125,8 @@ When users search for properties:
         context_messages.insert(0, {'role': 'system', 'content': system_message})
         context_messages.append({'role': 'user', 'content': message})
         
-        # Get AI response
-        response = get_groq_client().chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=context_messages,
-            temperature=0.7,
-            max_tokens=500
-        )
-        
-        ai_message = response.choices[0].message.content
+        # Temporary hardcoded response (Groq has issues in Railway Python 3.13)
+        ai_message = "Hello! I'm EstateGPT, your AI assistant for finding properties in Bucharest and Ilfov County. I can help you search for apartments, houses, and commercial properties. What are you looking for today?"
         
         # Check if property search
         search_indicators = ['apartment', 'house', 'property', 'bedroom', 'price', 'rent', 'buy', 'sale', 'garsoniera', 'studio']
